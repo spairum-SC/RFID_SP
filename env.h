@@ -14,7 +14,7 @@
 // MQTT Broker password
 #define MQTT_PASS "testing"
 // MQTT Broker client id
-#define MQTT_CLIENT_ID "Taman"
+#define MQTT_CLIENT_ID "RFID_001"
 
 // id of the device
 #define DEVICE_ID "Taman"
