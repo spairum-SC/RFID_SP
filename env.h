@@ -17,4 +17,4 @@
 #define MQTT_CLIENT_ID "RFID_001"
 
 // id of the device
-#define DEVICE_ID "Taman"
+#define DEVICE_ID "RFID_001"
