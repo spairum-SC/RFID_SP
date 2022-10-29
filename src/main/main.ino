@@ -6,22 +6,27 @@
 #include <Ticker.h>
 #include <ArduinoJson.h>
 #include <Arduino_JSON.h>
+// #include <LiquidCrystal_I2C.h>
 
 Ticker blinkLed;
 ESP8266WiFiMulti wifi_multi;
 
 const uint16_t connectTimeOutPerAP = 3000; // Defines the TimeOut(ms) which will be used to try and connect with any specific Access Point
 
-#define RST_PIN D1
-#define SDA_PIN D2
+#define RST_PIN D1 // MFRC522 Software Reset Pin
+#define SDA_PIN D2 // MFRC522 Software SPI Pin (SDA)
 
-const int Pompa = D4;
-const unsigned int TRIG_PIN = D0;
-const unsigned int ECHO_PIN = D3;
+const int Pompa = D4;             // Pin untuk pompa
+const int Pompa2 = D8;            // Pin untuk pompa 2
+const unsigned int TRIG_PIN = D0; // Pin untuk sensor jarak
+const unsigned int ECHO_PIN = D3; // Pin untuk sensor jarak
 String ID_mesin = DEVICE_ID;
 int run = 0;
 boolean successfulRead = false;
-MFRC522 mfrc522(SDA_PIN, RST_PIN);
+MFRC522 mfrc522(SDA_PIN, RST_PIN); // Create MFRC522 instance
+
+// Set the LCD address to 0x27 for a 16 chars and 2 line display
+// LiquidCrystal_I2C lcd(0x3F, 20, 4); // atau 0x3F
 
 EspMQTTClient client(
     MQTT_SERVER,   // MQTT Broker server ip
@@ -38,8 +43,11 @@ void setup()
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   pinMode(Pompa, OUTPUT);
+  pinMode(Pompa2, OUTPUT);
   digitalWrite(Pompa, HIGH); // OFF
+  digitalWrite(Pompa2, HIGH); // OFF
   mfrc522.PCD_Init();
+  // lcd.init();
   Serial.println("Spairum WiFi RFID");
   WiFi.mode(WIFI_STA);
   WiFi.persistent(false);
@@ -54,7 +62,7 @@ void setup()
   client.enableHTTPWebUpdater();    // Enable the web updater. User and password default to values of MQTTUsername and MQTTPassword. These can be overridded with enableHTTPWebUpdater("user", "password").
   client.enableOTA();               // Enable OTA (Over The Air) updates. Password defaults to MQTTPassword. Port is the default OTA port. Can be overridden with enableOTA("password", port).
   client.setKeepAlive(4);           // keepalive interval.
-  // client.enableLastWillMessage("mesin/status/offline", MQTT_CLIENT_ID); // You can activate the retain flag by setting the third parameter to true
+  client.enableLastWillMessage("mesin/status/offline", MQTT_CLIENT_ID); // You can activate the retain flag by setting the third parameter to true
 }
 
 void loop()
@@ -91,34 +99,24 @@ void loop()
     }
     delay(1000);
   }
-  // do
-  // {
-  //   successfulRead = getUID(); // Check if a card has been read successfully
-  // } while (!successfulRead);
+  int cont = 0;
   while (successfulRead)
   {
     client.loop();
-    Serial.println("RFID terbaca, Menungggu Mengisi");
+    Serial.println("RFID terbaca, mulai Mengisi");
     delay(1000);
+    if (cont > 10)
+    {
+      successfulRead = false;
+    }
+    cont++;
   }
   successfulRead = getUID(); // Check if a card has been read successfully
 }
 
 void onConnectionEstablished()
 {
-  // client.subscribe("mesin/test/RFID" + ID_mesin, [](const String &payload)
-  //                  {
-  //                    Serial.println("RFID : ");
-  //                    do {
-  //   successfulRead = getUID();        // Check if a card has been read successfully
-  // }
-  // while (!successfulRead); });
-  client.subscribe("mesin/fill/" + ID_mesin, [](const String &payload)
-                   { Serial.println("FILL Water ");
-                   successfulRead = false; });
-  client.subscribe("mesin/rejection/" + ID_mesin, [](const String &payload)
-                   { Serial.println(payload);
-                   successfulRead = false; });
+
   client.publish("mesin/status/online", ID_mesin);
   JSONVar TX;
   TX["clientid"] = ID_mesin;
@@ -126,6 +124,32 @@ void onConnectionEstablished()
   TX["IP"] = WiFi.localIP().toString();
   String jsonString = JSON.stringify(TX);
   client.publish("mesin/data/log", jsonString.c_str());
+
+  client.subscribe(
+      "mesin/fill/" + ID_mesin, [](const String &payload, uint8_t qos = 2)
+      { Serial.println("FILL Water");
+                  StaticJsonDocument<96> doc;
+                  DeserializationError error = deserializeJson(doc, payload);
+
+                  if (error) {
+                    Serial.print(F("deserializeJson() failed: "));
+                    Serial.println(error.f_str());
+                    return;
+                  }
+                  const char* ID_USER = doc["ID_USER"]; // "13CA5AA9"
+                  int MAX_ML = doc["MAX_ML"]; // 1000
+                  float FAKTOR_POMPA = doc["FAKTOR_POMPA"]; // 1.1
+                  int sisa = refillCard(MAX_ML, FAKTOR_POMPA);
+                  int vaule = sisa * FAKTOR_POMPA;
+                    JSONVar TX;
+                  TX["ID_USER"] = ID_USER;
+                  TX["vaule"] = vaule;
+                  String jsonString = JSON.stringify(TX);
+                  client.publish("mesin/endRefill/" + ID_mesin, jsonString.c_str());
+                   successfulRead = false; });
+  client.subscribe("mesin/rejection/" + ID_mesin, [](const String &payload, uint8_t qos = 2)
+                   { Serial.println(payload);
+                   successfulRead = false; });
   client.subscribe("cleanUp", [](const String &payload)
                    {
     Serial.println(payload);
@@ -191,6 +215,34 @@ void onConnectionEstablished()
   return; });
 }
 
+int refillCard(int MAX_ML, float FAKTOR_POMPA)
+{
+  unsigned long nilai = (MAX_ML / FAKTOR_POMPA);
+  float runvar = 0;
+  run = 0;
+  for (int x = 0; x < nilai;)
+  {
+    client.loop();
+    x += 10;
+    runvar = x;
+    digitalWrite(Pompa, LOW);
+
+    if (!mfrc522.PICC_IsNewCardPresent() || !mfrc522.PICC_ReadCardSerial())
+    {
+      Serial.println("Reax");
+      delay(50);
+    }
+    else
+    {
+      digitalWrite(Pompa, HIGH);
+      Serial.println("RFID Stop Mengisi");
+      return runvar;
+    }
+    delay(100);
+  }
+  digitalWrite(Pompa, HIGH);
+  return runvar;
+}
 boolean getUID()
 {
   client.loop();
@@ -214,11 +266,10 @@ boolean getUID()
   }
 
   Serial.println();
-
   Serial.print("Pesan : ");
   content.toUpperCase();
   Serial.println(content);
-  client.publish("mesin/uid/ID_MESIN" + ID_mesin, content);
+  client.publish("mesin/uid/" + ID_mesin, content, 2);
   mfrc522.PICC_HaltA(); // Stop reading the card and tell it to switch off
   return true;
 }
