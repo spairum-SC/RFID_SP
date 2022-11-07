@@ -1,0 +1,4 @@
+# Visual Studio Code
+.vscode/
+secrets.h
+env.h

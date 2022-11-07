@@ -13,8 +13,8 @@ const uint16_t connectTimeOutPerAP = 3000; // Defines the TimeOut(ms) which will
 #define RST_PIN D1 // MFRC522 Software Reset Pin
 #define SDA_PIN D2 // MFRC522 Software SPI Pin (SDA)
 
-const int Pompa = D4;             // Pin untuk pompa
-const int Pompa2 = D8;            // Pin untuk pompa 2
+const int Pompa = D8;             // Pin untuk pompa
+const int Pompa2 = D4;            // Pin untuk pompa 2
 const unsigned int TRIG_PIN = D0; // Pin untuk sensor jarak
 const unsigned int ECHO_PIN = D3; // Pin untuk sensor jarak
 String ID_mesin = DEVICE_ID;
@@ -32,13 +32,13 @@ EspMQTTClient client(
 
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(115200);
   SPI.begin();
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   pinMode(Pompa, OUTPUT);
   pinMode(Pompa2, OUTPUT);
-  digitalWrite(Pompa, HIGH);  // OFF
+  digitalWrite(Pompa, LOW);   // OFF
   digitalWrite(Pompa2, HIGH); // OFF
   mfrc522.PCD_Init();
   // lcd.init();
@@ -168,11 +168,11 @@ void onConnectionEstablished()
       if (status == "LOW")
       {
 
-        state = LOW; // ON
+        state = HIGH; // ON
       }
       else
       {
-        state = HIGH; // OFF
+        state = LOW; // OFF
       }
       cleanOn(id_Pompa, state);
     } });
@@ -266,7 +266,7 @@ int refillCard(int MAX_ML, float FAKTOR_POMPA)
     client.loop();
     x += 10;
     runvar = x;
-    digitalWrite(Pompa, LOW);
+    digitalWrite(Pompa, HIGH);
 
     if (!mfrc522.PICC_IsNewCardPresent() || !mfrc522.PICC_ReadCardSerial())
     {
@@ -275,13 +275,13 @@ int refillCard(int MAX_ML, float FAKTOR_POMPA)
     }
     else
     {
-      digitalWrite(Pompa, HIGH);
+      digitalWrite(Pompa, LOW);
       Serial.println("RFID Stop Mengisi");
       return runvar;
     }
     delay(100);
   }
-  digitalWrite(Pompa, HIGH);
+  digitalWrite(Pompa, LOW);
   return runvar;
 }
 boolean getUID()
