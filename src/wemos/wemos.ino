@@ -14,7 +14,7 @@ const uint16_t connectTimeOutPerAP = 3000; // Defines the TimeOut(ms) which will
 #define SDA_PIN D2 // MFRC522 Software SPI Pin (SDA)
 
 const int Pompa = D8;             // Pin untuk pompa
-const int Pompa2 = D4;            // Pin untuk pompa 2
+// const int Pompa2 = D4;            // Pin untuk pompa 2
 const unsigned int TRIG_PIN = D0; // Pin untuk sensor jarak
 const unsigned int ECHO_PIN = D3; // Pin untuk sensor jarak
 String ID_mesin = DEVICE_ID;
@@ -37,9 +37,9 @@ void setup()
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   pinMode(Pompa, OUTPUT);
-  pinMode(Pompa2, OUTPUT);
+  // pinMode(Pompa2, OUTPUT);
   digitalWrite(Pompa, LOW);   // OFF
-  digitalWrite(Pompa2, HIGH); // OFF
+  // digitalWrite(Pompa2, HIGH); // OFF
   mfrc522.PCD_Init();
   // lcd.init();
   Serial.println("Spairum WiFi RFID");
@@ -139,10 +139,12 @@ void onConnectionEstablished()
                   TX["vaule"] = vaule;
                   String jsonString = JSON.stringify(TX);
                   client.publish("mesin/endRefill/" + ID_mesin, jsonString.c_str());
-                   successfulRead = false; });
+                  delay(100);
+                  successfulRead = false; });
   client.subscribe("mesin/rejection/" + ID_mesin, [](const String &payload, uint8_t qos = 2)
                    { Serial.println(payload);
-                   successfulRead = false; });
+    delay(100);
+    successfulRead = false; });
   client.subscribe("cleanUp", [](const String &payload)
                    {
     Serial.println(payload);
@@ -176,27 +178,6 @@ void onConnectionEstablished()
       }
       cleanOn(id_Pompa, state);
     } });
-
-  client.subscribe("mesin/status/ping", [](const String &payload)
-                   {
-    long rssi = WiFi.RSSI();
-    long valule = mersure();
-    // long valule =  random(300);
-    JSONVar TX;
-    TX["clientid"] = ID_mesin;
-    TX["RSSI"] = rssi;
-    TX["vaule"] = valule;
-    String jsonString = JSON.stringify(TX);
-    client.publish("mesin/status/rssi", jsonString.c_str()); });
-
-  client.subscribe("mesin/status/wifi/" + ID_mesin, [](const String &payload)
-                   {
-    JSONVar TX;
-    TX["clientid"] = ID_mesin;
-    TX["Wifi"] = WiFi.SSID();
-    TX["IP"] =  WiFi.localIP().toString();
-    String jsonString = JSON.stringify(TX);
-    client.publish("mesin/data/log", jsonString.c_str()); });
 
   client.subscribe("stop/" + ID_mesin, [](const String &payload)
                    {
@@ -276,6 +257,7 @@ int refillCard(int MAX_ML, float FAKTOR_POMPA)
     else
     {
       digitalWrite(Pompa, LOW);
+      delay(1000);
       Serial.println("RFID Stop Mengisi");
       return runvar;
     }
@@ -289,7 +271,7 @@ boolean getUID()
   client.loop();
   if (!mfrc522.PICC_IsNewCardPresent() || !mfrc522.PICC_ReadCardSerial())
   {
-    Serial.println("Read");
+    // Serial.println("Standby");
     delay(50);
     return false;
   }
@@ -315,18 +297,18 @@ boolean getUID()
   return true;
 }
 
-long mersure()
-{
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
+// long mersure()
+// {
+//   digitalWrite(TRIG_PIN, LOW);
+//   delayMicroseconds(2);
+//   digitalWrite(TRIG_PIN, HIGH);
+//   delayMicroseconds(10);
+//   digitalWrite(TRIG_PIN, LOW);
 
-  const unsigned long duration = pulseIn(ECHO_PIN, HIGH);
-  long distance = duration / 29 / 2;
-  return distance;
-}
+//   const unsigned long duration = pulseIn(ECHO_PIN, HIGH);
+//   long distance = duration / 29 / 2;
+//   return distance;
+// }
 
 void cleanOn(uint8_t id_Pompa, uint8_t Status)
 {
@@ -347,11 +329,11 @@ int refill(int vaule, const char *akun, int faktor, uint8_t id_Pompa, String ID_
   update["Status"] = ("Megisi");
   update["user"] = akun;
   String dataupdate = JSON.stringify(update);
-  client.publish("update", dataupdate.c_str()); // update status undifined
-  delay(2500);
+  delay(1000);
   int nilai = vaule * 100 / faktor;
   unsigned long time_now = millis();
   unsigned long finish = time_now + nilai;
+  client.publish("update", dataupdate.c_str()); // update status undifined
   while (time_now < finish)
   {
     client.loop();
@@ -373,7 +355,7 @@ int refill(int vaule, const char *akun, int faktor, uint8_t id_Pompa, String ID_
       client.publish("current", datastop.c_str());
       return sisa;
     }
-    digitalWrite(id_Pompa, LOW);
+    digitalWrite(id_Pompa, HIGH);
     time_now = millis();
   }
   Serial.println("selesai sempurna");
@@ -383,7 +365,7 @@ int refill(int vaule, const char *akun, int faktor, uint8_t id_Pompa, String ID_
   stop["user"] = akun;
   String datastop = JSON.stringify(stop);
   client.publish("current", datastop.c_str());
-  digitalWrite(id_Pompa, HIGH);
+  digitalWrite(id_Pompa, LOW);
   Serial.print("Selesai ");
   return 1;
 }

@@ -38,7 +38,7 @@ EspMQTTClient client(
 
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(115200);
   SPI.begin();
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
